@@ -1,0 +1,281 @@
+openapi: 3.0.3
+info:
+  title: Ford Sentinel API
+  version: 1.0.0
+  description: |
+    API REST do Ford Sentinel — sistema de inteligência preditiva veicular.
+    Arquitetura SOA. Todas as respostas seguem o envelope `{ success, data?, error? }`.
+servers:
+  - url: https://api.fordsentinel.com/v1
+    description: Produção
+  - url: https://staging-api.fordsentinel.com/v1
+    description: Staging
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Envelope:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
+        data: { type: object }
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+
+    AuthTokens:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_in: { type: integer, example: 900 }
+        token_type: { type: string, example: Bearer }
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        role:
+          type: string
+          enum: [customer, analyst, admin]
+        tier:
+          type: string
+          enum: [Silver, Gold, Platinum]
+
+    Vehicle:
+      type: object
+      properties:
+        id: { type: string }
+        model: { type: string }
+        year: { type: integer }
+        vin: { type: string }
+        km: { type: integer }
+        healthScore: { type: integer, minimum: 0, maximum: 100 }
+
+    Part:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        health: { type: integer }
+        status:
+          type: string
+          enum: [ok, warning, critical]
+
+    Maintenance:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        daysUntil: { type: integer }
+        confidence: { type: integer }
+        estimatedCost: { type: number }
+        severity:
+          type: string
+          enum: [critical, warning, info]
+
+    ServiceRecord:
+      type: object
+      properties:
+        id: { type: string }
+        date: { type: string, format: date }
+        dealer: { type: string }
+        description: { type: string }
+        cost: { type: number }
+
+    Dealer:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        distanceKm: { type: number }
+        rating: { type: number }
+        address: { type: string }
+
+paths:
+  /auth/login:
+    post:
+      summary: Autentica usuário
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuthTokens' }
+        '401': { description: Credenciais inválidas }
+        '429': { description: Rate limit excedido }
+
+  /auth/register:
+    post:
+      summary: Cadastra novo usuário
+      security: []
+      responses: { '201': { description: Criado } }
+
+  /auth/refresh:
+    post:
+      summary: Renova access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token: { type: string }
+      responses: { '200': { description: Novo access token } }
+
+  /auth/logout:
+    post:
+      summary: Invalida sessão
+      responses: { '204': { description: Sessão encerrada } }
+
+  /vehicles:
+    get:
+      summary: Lista veículos do usuário
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Vehicle' }
+
+  /vehicles/{id}:
+    get:
+      summary: Detalhe do veículo
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: OK } }
+
+  /vehicles/{id}/parts:
+    get:
+      summary: Peças e status de saúde
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Part' }
+
+  /vehicles/{id}/health:
+    get:
+      summary: Score de saúde consolidado
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: OK } }
+
+  /predictions/{vehicleId}:
+    get:
+      summary: Manutenções preditivas
+      parameters:
+        - { name: vehicleId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Maintenance' }
+
+  /predictions/{id}/dismiss:
+    post:
+      summary: Dispensa um alerta
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '204': { description: Dispensado } }
+
+  /services/history:
+    get:
+      summary: Histórico de serviços
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ServiceRecord' }
+
+  /services/book:
+    post:
+      summary: Agenda um serviço
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vehicleId, dealerId, slot]
+              properties:
+                vehicleId: { type: string }
+                dealerId: { type: string }
+                maintenanceId: { type: string }
+                slot: { type: string, format: date-time }
+      responses: { '201': { description: Agendado } }
+
+  /services/slots:
+    get:
+      summary: Horários disponíveis
+      parameters:
+        - { name: dealerId, in: query, schema: { type: string } }
+        - { name: date, in: query, schema: { type: string, format: date } }
+      responses: { '200': { description: OK } }
+
+  /dealers:
+    get:
+      summary: Lista concessionárias próximas
+      parameters:
+        - { name: lat, in: query, schema: { type: number } }
+        - { name: lng, in: query, schema: { type: number } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Dealer' }
+
+  /dealers/{id}:
+    get:
+      summary: Detalhe da concessionária
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { '200': { description: OK } }

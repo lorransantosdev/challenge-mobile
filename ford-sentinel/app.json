@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Ford Sentinel",
+    "slug": "ford-sentinel",
+    "scheme": "ford-sentinel",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-router",
+      "expo-asset"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.fiap.fordsentinel",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.fiap.fordsentinel"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
