@@ -15,6 +15,8 @@
 - [4. Autenticação — JWT e Biometria](#4-autenticação--jwt-e-biometria)
 - [5. RBAC — Controle de Acesso por Role](#5-rbac--controle-de-acesso-por-role)
 - [6. Comunicação Segura — HTTPS](#6-comunicação-segura--https)
+  - [6.1 Rate Limiting e Idempotência](#61-rate-limiting-e-idempotência)
+  - [6.2 CORS Correto](#62-cors-correto)
 - [7. Tratamento Seguro de Erros](#7-tratamento-seguro-de-erros)
 - [8. Auditoria e Logging](#8-auditoria-e-logging)
 - [9. Proteção de Interface](#9-proteção-de-interface)
@@ -504,6 +506,59 @@ api.interceptors.response.use(
 
 ---
 
+## 6.1 Rate Limiting e Idempotência
+
+> **Requisito:** Rate limiting evita DoS e ataques repetitivos. Idempotency key garante que clique duplo não crie 2 registros.
+
+**Responsabilidade:** Rate limiting é implementado no **API Gateway** do servidor (`api.fordsentinel.com`), não no cliente mobile. O app mobile implementa as seguintes proteções equivalentes do lado cliente:
+
+**Guard contra loop infinito de refresh (`_retry`):**
+```typescript
+// [SEC-47] REFRESH AUTOMÁTICO — UMA TENTATIVA APENAS
+// A flag _retry evita que um 401 cause loop infinito de refreshes,
+// funcionando como idempotency key para a renovação de token.
+if (status === 401 && original && !original._retry) {
+  original._retry = true;  // garante que só tenta uma vez
+  const newToken = await refreshToken();
+  // ...
+}
+```
+
+**Timeout como proteção contra flooding:**
+```typescript
+// [SEC-42] TIMEOUT — ABORTA REQUISIÇÕES LENTAS
+// Protege contra Slow Loris e requisições que travam o app indefinidamente.
+const TIMEOUT = 15_000; // 15 segundos máximo
+```
+
+**Limitações conhecidas — responsabilidade do servidor:**
+- Rate limiting por IP/usuário: **API Gateway** (100 req/min/usuário)
+- Bloqueio após tentativas de login: **Auth Service** (5 tentativas/15min)
+- Idempotency keys em POSTs críticos: **header `Idempotency-Key`** no backend
+
+---
+
+## 6.2 CORS Correto
+
+> **Requisito:** Cross-Origin Resource Sharing com origens explícitas. Nunca usar wildcard `*`.
+
+**Responsabilidade:** CORS é uma política do **servidor HTTP**, não do cliente mobile. Um app React Native/Expo **não configura CORS** — ele é o cliente que faz as requisições. Quem configura é o `api.fordsentinel.com`.
+
+**O que o app garante do lado cliente:**
+- Todas as requisições vão para `https://api.fordsentinel.com/v1` — domínio único e explícito
+- Nenhuma requisição cross-origin não autorizada é feita
+- O header `Content-Type: application/json` e `Authorization: Bearer` são enviados consistentemente
+
+**O que o servidor deve configurar (backend):**
+```
+Access-Control-Allow-Origin: https://fordsentinel.com
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Access-Control-Allow-Headers: Authorization, Content-Type
+# NUNCA: Access-Control-Allow-Origin: *
+```
+
+---
+
 ## 7. Tratamento Seguro de Erros
 
 > **Requisito:** Erros internos nunca expostos ao cliente. Stack traces apenas em logs. Mensagens genéricas.
@@ -701,7 +756,9 @@ Alert.alert('Biometria', 'Não foi possível autenticar.');
 | 32 | Interface | Campos sem valores hardcoded | `login.tsx` | SEC-56 |
 | 33 | Interface | maxLength nos inputs | `login.tsx` | SEC-64 |
 | 34 | Interface | secureTextEntry para senha | `login.tsx` | SEC-65 |
-| 35 | Sanitização login | sanitize() antes de validar | `auth.ts` | SEC-27 |
+| 36 | Rate limiting cliente | _retry guard — evita loop de refresh | `api.ts` | SEC-47 |
+| 37 | Rate limiting servidor | Documentado — responsabilidade do API Gateway | — | — |
+| 38 | CORS | Documentado — responsabilidade do servidor backend | — | — |
 
 ### Distribuição dos comentários SEC por arquivo
 
