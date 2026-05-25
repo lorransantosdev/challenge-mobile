@@ -1,14 +1,23 @@
+// [SEC-51] IMPORTAÇÕES EXPLÍCITAS — SEM WILDCARD
+// Cada função importada individualmente de expo-haptics.
 import { Platform } from 'react-native';
-import * as H from 'expo-haptics';
+import {
+  impactAsync,
+  selectionAsync,
+  ImpactFeedbackStyle,
+} from 'expo-haptics';
 
-export const impact = (style: H.ImpactFeedbackStyle = H.ImpactFeedbackStyle.Medium) => {
+// [SEC-52] GUARD DE PLATAFORMA — HAPTICS APENAS EM DISPOSITIVOS FÍSICOS
+// A chamada é ignorada silenciosamente na web para evitar erros de runtime.
+export const impact = (style: ImpactFeedbackStyle = ImpactFeedbackStyle.Medium) => {
   if (Platform.OS === 'web') return;
-  H.impactAsync(style).catch(() => {});
+  impactAsync(style).catch(() => {});
 };
 
 export const selection = () => {
   if (Platform.OS === 'web') return;
-  H.selectionAsync().catch(() => {});
+  selectionAsync().catch(() => {});
 };
 
-export const ImpactStyle = H.ImpactFeedbackStyle;
+// [SEC-53] REEXPORTAÇÃO NOMEADA — SEM ALIAS DESNECESSÁRIO
+export { ImpactFeedbackStyle as ImpactStyle };

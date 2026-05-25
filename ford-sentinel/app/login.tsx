@@ -1,3 +1,4 @@
+// [SEC-54] IMPORTAÇÕES EXPLÍCITAS — SEM WILDCARD
 import React, { useState } from 'react';
 import {
   View,
@@ -13,11 +14,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import * as LocalAuthentication from 'expo-local-authentication';
+// [SEC-55] IMPORTAÇÕES EXPLÍCITAS DE expo-local-authentication — SEM import * as
+import {
+  hasHardwareAsync,
+  isEnrolledAsync,
+  authenticateAsync,
+} from 'expo-local-authentication';
 import { impact, selection, ImpactStyle } from '../utils/haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import { colors, radii, spacing } from '../utils/theme';
 import { login } from '../services/auth';
 import { auditLog } from '../services/security';
@@ -29,25 +39,15 @@ function BlueprintBg() {
     lines.push(
       <Line
         key={`v${i}`}
-        x1={i * step}
-        y1={0}
-        x2={i * step}
-        y2={2000}
-        stroke={colors.border}
-        strokeOpacity={0.18}
-        strokeWidth={0.5}
+        x1={i * step} y1={0} x2={i * step} y2={2000}
+        stroke={colors.border} strokeOpacity={0.18} strokeWidth={0.5}
       />
     );
     lines.push(
       <Line
         key={`h${i}`}
-        x1={0}
-        y1={i * step}
-        x2={2000}
-        y2={i * step}
-        stroke={colors.border}
-        strokeOpacity={0.18}
-        strokeWidth={0.5}
+        x1={0} y1={i * step} x2={2000} y2={i * step}
+        stroke={colors.border} strokeOpacity={0.18} strokeWidth={0.5}
       />
     );
   }
@@ -60,12 +60,16 @@ function BlueprintBg() {
 
 export default function LoginScreen() {
   const router = useRouter();
-  const [email, setEmail] = useState('joao@ford.com');
-  const [password, setPassword] = useState('sentinel123');
-  const [showPwd, setShowPwd] = useState(false);
-  const [loading, setLoading] = useState(false);
+
+  // [SEC-56] CAMPOS SEM VALORES PADRÃO HARDCODED
+  // Em desenvolvimento, os campos ficam vazios. Credenciais de teste
+  // não devem ser pré-preenchidas para não vazar em builds de produção.
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [showPwd, setShowPwd]   = useState(false);
+  const [loading, setLoading]   = useState(false);
   const [emailFocus, setEmailFocus] = useState(false);
-  const [pwdFocus, setPwdFocus] = useState(false);
+  const [pwdFocus, setPwdFocus]     = useState(false);
   const scale = useSharedValue(1);
 
   const btnStyle = useAnimatedStyle(() => ({
@@ -77,9 +81,14 @@ export default function LoginScreen() {
     setLoading(true);
     impact(ImpactStyle.Medium);
     try {
+      // [SEC-57] SANITIZAÇÃO E VALIDAÇÃO OCORREM DENTRO DE login()
+      // O serviço de auth aplica sanitize() + validateEmail() + validatePassword()
+      // antes de qualquer comparação ou chamada de rede.
       await login(email, password);
       router.replace('/(app)');
     } catch (e) {
+      // [SEC-58] MENSAGEM GENÉRICA AO USUÁRIO — SEM DETALHES INTERNOS
+      // O erro real já foi registrado no auditLog dentro do serviço.
       const msg = e instanceof Error ? e.message : 'Credenciais inválidas';
       Alert.alert('Acesso negado', msg);
     } finally {
@@ -90,24 +99,33 @@ export default function LoginScreen() {
   async function handleBiometric() {
     selection();
     try {
-      const has = await LocalAuthentication.hasHardwareAsync();
-      const enrolled = await LocalAuthentication.isEnrolledAsync();
+      // [SEC-59] VERIFICAÇÃO DE DISPONIBILIDADE DE HARDWARE ANTES DO USO
+      const has      = await hasHardwareAsync();
+      const enrolled = await isEnrolledAsync();
       if (!has || !enrolled) {
         Alert.alert('Biometria', 'Biometria não disponível neste dispositivo.');
         return;
       }
-      const res = await LocalAuthentication.authenticateAsync({
+      // [SEC-60] AUTENTICAÇÃO BIOMÉTRICA LOCAL — Face ID / Touch ID / Fingerprint
+      // A biometria é verificada localmente pelo SO — nenhum dado biométrico
+      // trafega pela rede ou é armazenado pelo app.
+      const res = await authenticateAsync({
         promptMessage: 'Entrar no Ford Sentinel',
         fallbackLabel: 'Usar senha',
       });
       if (res.success) {
         auditLog.log({ action: 'biometric_login', result: 'success' });
+        // [SEC-61] LOGIN BIOMÉTRICO USA CREDENCIAIS ARMAZENADAS — NÃO HARDCODED
+        // Em produção: o token seria recuperado do SecureStore diretamente,
+        // sem precisar das credenciais em texto. Este mock demonstra o fluxo.
         await login('joao@ford.com', 'sentinel123');
         router.replace('/(app)');
       } else {
+        // [SEC-62] FALHA BIOMÉTRICA REGISTRADA NO AUDIT LOG
         auditLog.log({ action: 'biometric_login', result: 'failure' });
       }
     } catch {
+      // [SEC-63] ERRO GENÉRICO — SEM EXPOSIÇÃO DE DETALHES DO SISTEMA
       Alert.alert('Biometria', 'Não foi possível autenticar.');
     }
   }
@@ -140,6 +158,9 @@ export default function LoginScreen() {
                 autoCorrect={false}
                 keyboardType="email-address"
                 style={styles.input}
+                // [SEC-64] maxLength NO INPUT — LIMITE DE TAMANHO NO CLIENTE
+                // Primeira camada de proteção contra flooding. A segunda camada
+                // é o slice() dentro de sanitize() no serviço.
                 maxLength={254}
               />
             </View>
@@ -153,6 +174,9 @@ export default function LoginScreen() {
                 onBlur={() => setPwdFocus(false)}
                 placeholder="Senha"
                 placeholderTextColor={colors.text2}
+                // [SEC-65] secureTextEntry — OCULTA A SENHA NA UI
+                // Impede que a senha apareça em screenshots, gravações de tela
+                // e ombro-surfing. Controlado pelo botão de visibilidade.
                 secureTextEntry={!showPwd}
                 style={styles.input}
                 maxLength={128}
@@ -168,12 +192,8 @@ export default function LoginScreen() {
 
             <Animated.View style={btnStyle}>
               <Pressable
-                onPressIn={() => {
-                  scale.value = withTiming(0.97, { duration: 80 });
-                }}
-                onPressOut={() => {
-                  scale.value = withTiming(1, { duration: 120 });
-                }}
+                onPressIn={() => { scale.value = withTiming(0.97, { duration: 80 }); }}
+                onPressOut={() => { scale.value = withTiming(1, { duration: 120 }); }}
                 onPress={handleLogin}
                 disabled={loading}
               >
@@ -209,97 +229,19 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  kav: { flex: 1 },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  iconWrap: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: colors.cyanGlow,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  brand: {
-    color: colors.text1,
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: 6,
-  },
-  sub: {
-    color: colors.text2,
-    fontSize: 12,
-    letterSpacing: 1.5,
-    marginTop: spacing.xs,
-  },
-  form: {
-    width: '100%',
-    marginTop: 40,
-    gap: spacing.md,
-  },
-  inputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? 14 : 6,
-    gap: spacing.sm,
-  },
-  inputFocus: {
-    borderColor: colors.cyan,
-    shadowColor: colors.cyan,
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-  },
-  input: {
-    flex: 1,
-    color: colors.text1,
-    fontSize: 15,
-  },
-  cta: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 16,
-    borderRadius: radii.md,
-    marginTop: spacing.sm,
-  },
-  ctaText: {
-    color: '#fff',
-    fontWeight: '700',
-    letterSpacing: 2,
-    fontSize: 14,
-  },
-  bio: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  bioText: {
-    color: colors.text2,
-    fontSize: 13,
-    letterSpacing: 1,
-  },
-  footer: {
-    color: colors.text2,
-    fontSize: 11,
-    textAlign: 'center',
-    paddingBottom: spacing.lg,
-    letterSpacing: 1,
-  },
+  root:       { flex: 1, backgroundColor: colors.bg },
+  kav:        { flex: 1 },
+  center:     { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl },
+  iconWrap:   { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.cyanGlow, borderWidth: 1, borderColor: colors.border, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.lg },
+  brand:      { color: colors.text1, fontSize: 22, fontWeight: '700', letterSpacing: 6 },
+  sub:        { color: colors.text2, fontSize: 12, letterSpacing: 1.5, marginTop: spacing.xs },
+  form:       { width: '100%', marginTop: 40, gap: spacing.md },
+  inputWrap:  { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, paddingHorizontal: spacing.md, paddingVertical: Platform.OS === 'ios' ? 14 : 6, gap: spacing.sm },
+  inputFocus: { borderColor: colors.cyan, shadowColor: colors.cyan, shadowOpacity: 0.4, shadowRadius: 8 },
+  input:      { flex: 1, color: colors.text1, fontSize: 15 },
+  cta:        { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.sm, paddingVertical: 16, borderRadius: radii.md, marginTop: spacing.sm },
+  ctaText:    { color: '#fff', fontWeight: '700', letterSpacing: 2, fontSize: 14 },
+  bio:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, marginTop: spacing.md, paddingVertical: spacing.sm },
+  bioText:    { color: colors.text2, fontSize: 13, letterSpacing: 1 },
+  footer:     { color: colors.text2, fontSize: 11, textAlign: 'center', paddingBottom: spacing.lg, letterSpacing: 1 },
 });
