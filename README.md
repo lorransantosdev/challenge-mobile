@@ -5,6 +5,14 @@ App React Native (Expo) — sistema de inteligência preditiva veicular.
 
 Duas telas: Login e Home. Tema dark, estética de painel automotivo premium com SVG blueprint do veículo, gauge de saúde animado e cards de manutenção preditiva.
 
+# Autores
+
+Fabiano RM: 555524
+Lorran RM: 558982
+Maria RM: 557478
+Pedro RM: 556268
+Vinícius RM: 555200
+
 ---
 
 ## Setup

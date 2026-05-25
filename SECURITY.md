@@ -4,6 +4,13 @@
 > Cada seção mapeia um requisito ao código implementado.
 > Todos os comentários `[SEC-01]` a `[SEC-65]` estão documentados aqui.
 
+# Autores
+
+Fabiano RM: 555524
+Lorran RM: 558982
+Maria RM: 557478
+Pedro RM: 556268
+Vinícius RM: 555200
 ---
 
 ## Índice
