@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(dir)",
-      "Bash(npx expo *)",
-      "PowerShell(npx expo install expo-asset 2>&1 | Select-Object -Last 10)"
-    ]
-  }
-}
